@@ -1,30 +1,33 @@
 var express = require("express");
 var router = express.Router();
-
 let roleModel = require("../schemas/roles");
+let { CheckLogin, CheckRole } = require('../utils/authHandler');
 
-
+// GET /api/v1/roles - Ai cung xem duoc
 router.get("/", async function (req, res, next) {
-    let roles = await roleModel.find({ isDeleted: false });
-    res.send(roles);
-});
-
-
-router.get("/:id", async function (req, res, next) {
     try {
-        let result = await roleModel.find({ _id: req.params.id, isDeleted: false });
-        if (result.length > 0) {
-            res.send(result);
-        }
-        else {
-            res.status(404).send({ message: "id not found" });
-        }
+        let roles = await roleModel.find({ isDeleted: false });
+        res.send(roles);
     } catch (error) {
-        res.status(404).send({ message: "id not found" });
+        res.status(400).send({ message: error.message });
     }
 });
 
+// GET /api/v1/roles/:id - Ai cung xem duoc
+router.get("/:id", async function (req, res, next) {
+    try {
+        let result = await roleModel.findOne({ _id: req.params.id, isDeleted: false });
+        if (result) {
+            res.send(result);
+        } else {
+            res.status(404).send({ message: "Khong tim thay role" });
+        }
+    } catch (error) {
+        res.status(404).send({ message: "ID khong hop le" });
+    }
+});
 
+// POST /api/v1/roles - Cho phép tạo role không cần đăng nhập để tiện test
 router.post("/", async function (req, res, next) {
     try {
         let newItem = new roleModel({
@@ -32,18 +35,19 @@ router.post("/", async function (req, res, next) {
             description: req.body.description
         });
         await newItem.save();
-        res.send(newItem);
+        res.status(201).send(newItem);
     } catch (err) {
         res.status(400).send({ message: err.message });
     }
 });
 
-router.put("/:id", async function (req, res, next) {
+// PUT /api/v1/roles/:id - Chi ADMIN
+router.put("/:id", CheckLogin, CheckRole("ADMIN"), async function (req, res, next) {
     try {
         let id = req.params.id;
         let updatedItem = await roleModel.findByIdAndUpdate(id, req.body, { new: true });
         if (!updatedItem) {
-            return res.status(404).send({ message: "id not found" });
+            return res.status(404).send({ message: "Khong tim thay role" });
         }
         res.send(updatedItem);
     } catch (err) {
@@ -51,7 +55,8 @@ router.put("/:id", async function (req, res, next) {
     }
 });
 
-router.delete("/:id", async function (req, res, next) {
+// DELETE /api/v1/roles/:id - Chi ADMIN (soft delete)
+router.delete("/:id", CheckLogin, CheckRole("ADMIN"), async function (req, res, next) {
     try {
         let id = req.params.id;
         let updatedItem = await roleModel.findByIdAndUpdate(
@@ -60,9 +65,9 @@ router.delete("/:id", async function (req, res, next) {
             { new: true }
         );
         if (!updatedItem) {
-            return res.status(404).send({ message: "id not found" });
+            return res.status(404).send({ message: "Khong tim thay role" });
         }
-        res.send(updatedItem);
+        res.send({ message: "Xoa role thanh cong", role: updatedItem });
     } catch (err) {
         res.status(400).send({ message: err.message });
     }

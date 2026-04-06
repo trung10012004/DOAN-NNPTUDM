@@ -17,23 +17,23 @@ module.exports = {
                 token = req.headers.authorization.split(" ")[1];
             }
             let result = jwt.verify(token, 'secret')
-            if (result.exp * 1000 < Date.now) {
-                res.status(404).send({
-                    message: "ban chua dang nhap"
+            if (result.exp * 1000 < Date.now()) {
+                res.status(401).send({
+                    message: "Phien dang nhap da het han"
                 })
                 return;
             }
             let user = await userController.GetAnUserById(result.id);
             if (!user) {
-                res.status(404).send({
-                    message: "ban chua dang nhap"
+                res.status(401).send({
+                    message: "Tai khoan khong ton tai"
                 })
                 return;
             }
             req.user = user;
             next()
         } catch (error) {
-            res.status(404).send({
+            res.status(401).send({
                 message: "ban chua dang nhap"
             })
         }
@@ -41,6 +41,9 @@ module.exports = {
     CheckRole: function (...requiredRole) {
         return async function (req, res, next) {
             let user = req.user;
+            if (!user || !user.role) {
+                return res.status(403).send({ message: "ban khong co quyen" });
+            }
             let currentRole = user.role.name;
             if (requiredRole.includes(currentRole)) {
                 next()
