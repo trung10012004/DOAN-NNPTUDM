@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Edit, Trash2, X, User as UserIcon, Shield, Mail, Loader2 } from 'lucide-react';
 import api from '../../api/axios';
 
 export default function AdminUsers() {
@@ -8,6 +8,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     username: '',
@@ -18,21 +19,20 @@ export default function AdminUsers() {
 
   const fetchData = async () => {
     try {
-      const { data } = await api.get('/users');
-      setUsers(data);
-      // Fetch roles if we had an endpoint. Since we don't standardly expose roles in routes, 
-      // we might need to hardcode the USER role ID or just let the backend handle it during register.
-      // But admin POST /users requires role. So we need the role endpoint.
-      // Fortunately /roles may exist. Let's try.
-      try {
-        const roleRes = await api.get('/roles');
-        setRoles(roleRes.data);
-      } catch (e) {
-        // Fallback or ignore
+      const [userRes, roleRes] = await Promise.all([
+        api.get('/users'),
+        api.get('/roles')
+      ]);
+      setUsers(userRes.data);
+      setRoles(roleRes.data);
+      
+      if (roleRes.data.length > 0 && !formData.role) {
+        // Find USER role by default if exists
+        const userRole = roleRes.data.find(r => r.name === 'USER');
+        setFormData(prev => ({ ...prev, role: userRole?._id || roleRes.data[0]._id }));
       }
     } catch (err) {
       console.error(err);
-      alert('Lỗi khi tải người dùng');
     } finally {
       setLoading(false);
     }
@@ -48,16 +48,17 @@ export default function AdminUsers() {
       setFormData({
         username: user.username,
         email: user.email,
-        password: '', // Không hiện password cũ
+        password: '',
         role: user.role?._id || ''
       });
     } else {
       setEditId(null);
+      const userRole = roles.find(r => r.name === 'USER');
       setFormData({
         username: '',
         email: '',
         password: '',
-        role: roles.length > 0 ? roles[0]._id : ''
+        role: userRole?._id || (roles.length > 0 ? roles[0]._id : '')
       });
     }
     setShowModal(true);
@@ -75,10 +76,11 @@ export default function AdminUsers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const payload = { ...formData };
       if (editId) {
-        if (!payload.password) delete payload.password; // không update pass nếu rỗng
+        if (!payload.password) delete payload.password;
         await api.put(`/users/${editId}`, payload);
       } else {
         await api.post('/users', payload);
@@ -87,109 +89,128 @@ export default function AdminUsers() {
       fetchData();
     } catch (err) {
       alert('Lỗi: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="animate-fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text-primary)' }}>Quản lý Người dùng</h1>
-        <button onClick={() => handleOpenModal()} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}>
-          <Plus size={18} /> Thêm Người dùng
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>Quản lý Người dùng</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Quản lý tài khoản và phân quyền truy cập hệ thống.</p>
+        </div>
+        <button onClick={() => handleOpenModal()} className="btn btn-primary" style={{ padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-lg)' }}>
+          <Plus size={20} /> <span style={{ marginLeft: '0.25rem' }}>Thêm Người dùng</span>
         </button>
       </div>
-      
-      <div className="card" style={{ overflowX: 'auto', position: 'relative', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}>
+
+      <div className="card" style={{ border: 'none', boxShadow: 'var(--shadow-lg)', overflowX: 'auto' }}>
         {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải danh sách người dùng...</div>
+          <div style={{ padding: '5rem', textAlign: 'center' }}>
+            <Loader2 className="animate-spin" size={40} style={{ color: 'var(--primary)', margin: '0 auto' }} />
+          </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead style={{ backgroundColor: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)' }}>
-              <tr>
-                <th style={{ padding: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Tên đăng nhập</th>
-                <th style={{ padding: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Email</th>
-                <th style={{ padding: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Vai trò</th>
-                <th style={{ padding: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Hành động</th>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '1.25rem 1.5rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>NGƯỜI DÙNG</th>
+                <th style={{ padding: '1.25rem 1.5rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>EMAIL</th>
+                <th style={{ padding: '1.25rem 1.5rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>VAI TRÒ</th>
+                <th style={{ padding: '1.25rem 1.5rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>THAO TÁC</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody style={{ backgroundColor: 'white' }}>
               {users.map(u => (
-                <tr key={u._id} style={{ borderBottom: '1px solid var(--border)', opacity: u.isDeleted ? 0.5 : 1, transition: 'background-color 0.2s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                  <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{u.username} {u.isDeleted && <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>(Đã vô hiệu hóa)</span>}</td>
-                  <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{u.email}</td>
-                  <td style={{ padding: '1rem' }}>
+                <tr key={u._id} style={{ borderBottom: '1px solid var(--border)', opacity: u.isDeleted ? 0.6 : 1, transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
+                        <UserIcon size={20} />
+                      </div>
+                      <div style={{ fontWeight: 600 }}>{u.username} {u.isDeleted && <span style={{ color: 'var(--danger)', fontSize: '0.7rem' }}>(Disabled)</span>}</div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '1.25rem 1.5rem', color: 'var(--text-secondary)' }}>{u.email}</td>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
                     <span style={{ 
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
+                      padding: '0.375rem 0.75rem', 
+                      borderRadius: '9999px',
                       fontSize: '0.75rem',
                       fontWeight: 600,
-                      backgroundColor: u.role?.name === 'ADMIN' ? 'var(--primary-light)' : 'var(--bg-secondary)',
+                      backgroundColor: u.role?.name === 'ADMIN' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(100, 116, 139, 0.1)',
                       color: u.role?.name === 'ADMIN' ? 'var(--primary)' : 'var(--text-secondary)',
-                      border: '1px solid',
-                      borderColor: u.role?.name === 'ADMIN' ? 'rgba(var(--primary-rgb), 0.2)' : 'var(--border)'
+                      border: '1px solid currentColor'
                     }}>
                       {u.role?.name || 'USER'}
                     </span>
                   </td>
-                  <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => handleOpenModal(u)} className="btn" style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '0.5rem', borderRadius: 'var(--radius-md)' }} title="Sửa"><Edit size={16} /></button>
-                    {u.role?.name !== 'ADMIN' && !u.isDeleted && (
-                      <button onClick={() => handleDelete(u._id)} className="btn btn-danger" style={{ padding: '0.5rem', borderRadius: 'var(--radius-md)' }} title="Vô hiệu hóa">
-                        <Trash2 size={16} />
-                      </button>
-                    )}
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button onClick={() => handleOpenModal(u)} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><Edit size={18} /></button>
+                      {u.role?.name !== 'ADMIN' && !u.isDeleted && (
+                        <button onClick={() => handleDelete(u._id)} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><Trash2 size={18} /></button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && <tr><td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Không tìm thấy người dùng nào.</td></tr>}
             </tbody>
           </table>
         )}
       </div>
 
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, padding: '1rem' }}>
-          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', padding: '2rem', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', flexShrink: 0 }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>{editId ? 'Sửa Người dùng' : 'Thêm Người dùng'}</h2>
-              <button onClick={() => setShowModal(false)} style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: '0.5rem' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}><X size={24} /></button>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1.5rem' }}>
+          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', backgroundColor: 'white', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>{editId ? 'Sửa Người dùng' : 'Thêm Người dùng mới'}</h2>
+              <button onClick={() => setShowModal(false)}><X size={24} /></button>
             </div>
             
-            <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.5rem' }}>
-              <form id="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Tên đăng nhập</label>
-                  <input required type="text" className="input-field" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Tên đăng nhập</label>
+                <div style={{ position: 'relative' }}>
+                  <input required type="text" className="input-field" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} style={{ paddingLeft: '2.5rem' }} />
+                  <UserIcon size={18} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 </div>
+              </div>
 
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Email</label>
-                  <input required type="email" className="input-field" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Email</label>
+                <div style={{ position: 'relative' }}>
+                  <input required type="email" className="input-field" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={{ paddingLeft: '2.5rem' }} />
+                  <Mail size={18} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 </div>
-                
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Mật khẩu {editId && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(để trống nếu không đổi)</span>}</label>
-                  <input required={!editId} type="password" className="input-field" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                </div>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Mật khẩu {editId && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(bỏ trống nếu không đổi)</span>}</label>
+                <input required={!editId} type="password" className="input-field" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              </div>
 
-                {roles.length > 0 && (
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Vai trò</label>
-                    <select required className="input-field" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}>
-                      <option value="" disabled>-- Chọn vai trò --</option>
-                      {roles.map(r => (
-                        <option key={r._id} value={r._id}>{r.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </form>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexShrink: 0, paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-              <button type="button" onClick={() => setShowModal(false)} className="btn" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>Hủy</button>
-              <button type="submit" form="user-form" className="btn btn-primary" style={{ flex: 1, padding: '0.75rem', fontWeight: 600, boxShadow: '0 4px 6px -1px var(--primary-light)' }}>Lưu</button>
-            </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Vai trò</label>
+                <div style={{ position: 'relative' }}>
+                  <select required className="input-field" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} style={{ paddingLeft: '2.5rem', backgroundColor: 'white' }}>
+                    <option value="" disabled>-- Chọn vai trò --</option>
+                    {roles.map(r => (
+                      <option key={r._id} value={r._id}>{r.name}</option>
+                    ))}
+                  </select>
+                  <Shield size={18} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 10 }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="button" onClick={() => setShowModal(false)} className="btn" style={{ flex: 1, backgroundColor: '#f1f5f9' }}>Hủy</button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ flex: 2 }}>
+                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (editId ? 'Cập nhật' : 'Tạo người dùng')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

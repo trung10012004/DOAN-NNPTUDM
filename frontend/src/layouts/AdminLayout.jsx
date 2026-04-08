@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Users, Home, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Home, LogOut, Tag, Shield } from 'lucide-react';
 import api from '../api/axios';
 
 export default function AdminLayout() {
@@ -33,6 +33,9 @@ export default function AdminLayout() {
           </Link>
           <Link to="/admin/products" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)' }}>
             <ShoppingBag size={20} /> Sản Phẩm
+          </Link>
+          <Link to="/admin/categories" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)' }}>
+            <Tag size={20} /> Danh Mục
           </Link>
           <Link to="/admin/users" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)' }}>
             <Users size={20} /> Người Dùng

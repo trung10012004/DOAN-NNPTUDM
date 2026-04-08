@@ -10,7 +10,7 @@ router.get('/', CheckLogin, async function (req, res, next) {
     let user = req.user;
     let cart = await cartModel.findOne({
         user: user.id
-    })
+    }).populate('products.product');
     res.send(cart.products)
 })
 //add
